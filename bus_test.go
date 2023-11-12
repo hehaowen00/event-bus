@@ -39,11 +39,11 @@ func TestEventBus_1(t *testing.T) {
 }
 
 func TestEventBus_2(t *testing.T) {
-	bus := eventbus.NewWithHistory(eventbus.NewFixedHistory[int](2))
-	wg := sync.WaitGroup{}
+	hist := eventbus.NewFixedHistory[int](2)
+	hist.Prefill([]int{42, 1337})
 
-	bus.Send() <- 42
-	bus.Send() <- 1337
+	bus := eventbus.NewWithHistory(hist)
+	wg := sync.WaitGroup{}
 
 	rx1, err := bus.Subscribe(true)
 	if err != nil {

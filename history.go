@@ -3,6 +3,7 @@ package eventbus
 import "sync"
 
 type HistoryStrategy[T any] interface {
+	Prefill([]T)
 	append(T)
 	fill(chan<- T)
 }
@@ -13,6 +14,8 @@ type EmptyHistory[T any] struct {
 func NewEmptyHistory[T any]() HistoryStrategy[T] {
 	return &EmptyHistory[T]{}
 }
+
+func (hist *EmptyHistory[T]) Prefill(data []T) {}
 
 func (hist *EmptyHistory[T]) append(_ T) {}
 
@@ -57,6 +60,10 @@ type UnboundedHistory[T any] struct {
 
 func NewUnboundedHistory[T any]() HistoryStrategy[T] {
 	return &UnboundedHistory[T]{}
+}
+
+func (hist *UnboundedHistory[T]) Prefill(data []T) {
+	hist.data = data
 }
 
 func (hist *UnboundedHistory[T]) append(msg T) {
