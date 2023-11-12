@@ -9,7 +9,7 @@ import (
 )
 
 func TestEventBus_1(t *testing.T) {
-	bus := eventbus.New[int](0)
+	bus := eventbus.New[int]()
 	wg := sync.WaitGroup{}
 
 	rx1, err := bus.Subscribe(false)
@@ -39,7 +39,7 @@ func TestEventBus_1(t *testing.T) {
 }
 
 func TestEventBus_2(t *testing.T) {
-	bus := eventbus.New[int](2)
+	bus := eventbus.NewWithHistory(eventbus.NewFixedHistory[int](2))
 	wg := sync.WaitGroup{}
 
 	bus.Send() <- 42

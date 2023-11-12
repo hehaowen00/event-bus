@@ -13,8 +13,7 @@ type EventBus[T any] struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	backlog       []T
-	limit         int
+	history       HistoryStrategy[T]
 	incoming      chan T
 	subscriptions []*Receiver[T]
 
@@ -31,14 +30,32 @@ type Receiver[T any] struct {
 	backfill bool
 }
 
-func New[T any](backlog int) *EventBus[T] {
+func New[T any]() *EventBus[T] {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	bus := &EventBus[T]{
 		ctx:    ctx,
 		cancel: cancel,
 
-		limit:             backlog,
+		history:           NewEmptyHistory[T](),
+		incoming:          make(chan T),
+		subscribeEvents:   make(chan *Receiver[T]),
+		unsubscribeEvents: make(chan *Receiver[T]),
+	}
+
+	go bus.start()
+
+	return bus
+}
+
+func NewWithHistory[T any](strategy HistoryStrategy[T]) *EventBus[T] {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	bus := &EventBus[T]{
+		ctx:    ctx,
+		cancel: cancel,
+
+		history:           strategy,
 		incoming:          make(chan T),
 		subscribeEvents:   make(chan *Receiver[T]),
 		unsubscribeEvents: make(chan *Receiver[T]),
@@ -61,21 +78,15 @@ func (bus *EventBus[T]) start() {
 			bus.subscriptions = append(bus.subscriptions, client)
 			if client.backfill {
 				go func() {
-					for i := range bus.backlog {
-						client.recv <- bus.backlog[i]
-					}
+					bus.history.fill(client.recv)
 				}()
 			}
 		case _ = <-bus.unsubscribeEvents:
 		case msg := <-bus.incoming:
-			bus.backlog = append(bus.backlog, msg)
+			bus.history.append(msg)
 
 			for i := range bus.subscriptions {
 				bus.subscriptions[i].recv <- msg
-			}
-
-			if len(bus.backlog) > bus.limit {
-				bus.backlog = bus.backlog[1:]
 			}
 		}
 	}
@@ -92,7 +103,7 @@ func (bus *EventBus[T]) Subscribe(backfill bool) (*Receiver[T], error) {
 	default:
 		rx := &Receiver[T]{
 			bus:      bus,
-			recv:     make(chan T, bus.limit),
+			recv:     make(chan T),
 			notify:   make(chan struct{}),
 			backfill: backfill,
 		}
