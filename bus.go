@@ -79,12 +79,15 @@ func (bus *EventBus[T]) start() {
 			}
 			return
 		case client := <-bus.subscribeEvents:
-			bus.subscriptions = append(bus.subscriptions, client)
 			if client.backfill {
 				go func() {
+					client.mu.Lock()
+					defer client.mu.Unlock()
+
 					bus.history.fill(client.recv)
 				}()
 			}
+			bus.subscriptions = append(bus.subscriptions, client)
 		case _ = <-bus.unsubscribeEvents:
 		case msg := <-bus.incoming:
 			bus.history.append(msg)
