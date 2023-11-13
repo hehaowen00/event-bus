@@ -1,5 +1,7 @@
 # event-bus
 
+A golang channel based event bus that tries to guarantee the same message order for all subscribers.
+
 ## usage
 
 ```go
