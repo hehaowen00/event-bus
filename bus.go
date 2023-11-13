@@ -130,6 +130,9 @@ func (bus *EventBus[T]) start() {
 }
 
 func (bus *EventBus[T]) Close() {
+	bus.mu.Lock()
+	defer bus.mu.Unlock()
+
 	bus.cancel()
 }
 
