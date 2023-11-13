@@ -13,6 +13,7 @@ var (
 type EventBus[T any] struct {
 	ctx    context.Context
 	cancel context.CancelFunc
+	mu     sync.Mutex
 
 	history       HistoryStrategy[T]
 	incoming      chan T
@@ -153,6 +154,13 @@ func (bus *EventBus[T]) Unsubscribe(r *Receiver[T]) {
 
 func (bus *EventBus[T]) Send() chan<- T {
 	return bus.incoming
+}
+
+func (bus *EventBus[T]) SendMsg(msg T) {
+	bus.mu.Lock()
+	defer bus.mu.Unlock()
+
+	bus.incoming <- msg
 }
 
 func (rx *Receiver[T]) Notify() <-chan struct{} {

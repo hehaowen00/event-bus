@@ -25,8 +25,8 @@ func TestEventBus_1(t *testing.T) {
 	go startWorker(rx1, 1, &wg)
 	go startWorker(rx2, 2, &wg)
 
-	bus.Send() <- 42
-	bus.Send() <- 1337
+	bus.SendMsg(42)
+	bus.SendMsg(1337)
 
 	time.Sleep(time.Second)
 
@@ -78,11 +78,11 @@ func TestEventBus_3(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bus.Send() <- 42
+	bus.SendMsg(42)
 
 	go startWorker(rx, 1, &wg)
 
-	bus.Send() <- 1337
+	bus.SendMsg(1337)
 
 	time.Sleep(time.Second)
 
