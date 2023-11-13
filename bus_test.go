@@ -22,11 +22,12 @@ func TestEventBus_1(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	wg.Add(2)
 	go startWorker(rx1, 1, &wg)
 	go startWorker(rx2, 2, &wg)
 
-	bus.SendMsg(42)
-	bus.SendMsg(1337)
+	bus.Send(42)
+	bus.Send(1337)
 
 	time.Sleep(time.Second)
 
@@ -56,6 +57,7 @@ func TestEventBus_2(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	wg.Add(2)
 	go startWorker(rx1, 1, &wg)
 	go startWorker(rx2, 2, &wg)
 
@@ -78,11 +80,12 @@ func TestEventBus_3(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bus.SendMsg(42)
+	bus.Send(42)
 
+	wg.Add(1)
 	go startWorker(rx, 1, &wg)
 
-	bus.SendMsg(1337)
+	bus.Send(1337)
 
 	time.Sleep(time.Second)
 
@@ -92,7 +95,6 @@ func TestEventBus_3(t *testing.T) {
 }
 
 func startWorker[T any](rx *eventbus.Receiver[T], id int, wg *sync.WaitGroup) {
-	wg.Add(1)
 	defer wg.Done()
 
 	for {

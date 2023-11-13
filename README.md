@@ -25,7 +25,7 @@ go func() {
 }()
 
 // send message
-bus.SendMsg(42)
+bus.Send(42)
 
 bus.Close()
 ```

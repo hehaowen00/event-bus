@@ -152,11 +152,11 @@ func (bus *EventBus[T]) Unsubscribe(r *Receiver[T]) {
 	bus.unsubscribeEvents <- r
 }
 
-func (bus *EventBus[T]) Send() chan<- T {
+func (bus *EventBus[T]) Sender() chan<- T {
 	return bus.incoming
 }
 
-func (bus *EventBus[T]) SendMsg(msg T) {
+func (bus *EventBus[T]) Send(msg T) {
 	bus.mu.Lock()
 	defer bus.mu.Unlock()
 
