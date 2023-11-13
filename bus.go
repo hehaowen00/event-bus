@@ -75,9 +75,10 @@ func (bus *EventBus[T]) start() {
 		select {
 		case <-bus.ctx.Done():
 			for i := range bus.subscriptions {
-				bus.subscriptions[i].notify <- struct{}{}
+				r := bus.subscriptions[i]
+				r.notify <- struct{}{}
 			}
-			return
+			break
 		case client := <-bus.subscribeEvents:
 			if client.backfill {
 				go func() {

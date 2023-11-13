@@ -1,6 +1,8 @@
 package eventbus
 
-import "sync"
+import (
+	"sync"
+)
 
 type HistoryStrategy[T any] interface {
 	Prefill([]T)
@@ -23,34 +25,42 @@ func (hist *EmptyHistory[T]) fill(_ chan<- T) {}
 
 type FixedHistory[T any] struct {
 	data  []T
-	count int
+	size  int
+	index int
 	mu    sync.Mutex
 }
 
-func NewFixedHistory[T any](count int) HistoryStrategy[T] {
+func NewFixedHistory[T any](size int) HistoryStrategy[T] {
 	return &FixedHistory[T]{
-		count: count,
+		data: make([]T, size, size),
+		size: size,
 	}
 }
 
 func (hist *FixedHistory[T]) Prefill(data []T) {
-	hist.data = data
+	for i := range data {
+		hist.append(data[i])
+	}
 }
 
 func (hist *FixedHistory[T]) append(msg T) {
 	hist.mu.Lock()
 	defer hist.mu.Unlock()
 
-	hist.data = append(hist.data, msg)
-	if len(hist.data) > hist.count {
-		hist.data = hist.data[1:]
-	}
+	hist.data[hist.index] = msg
+	hist.index = (hist.index + 1) % hist.size
 }
 
 func (hist *FixedHistory[T]) fill(rx chan<- T) {
-	for i := range hist.data {
-		rx <- hist.data[i]
-	}
+	hist.mu.Lock()
+	defer hist.mu.Unlock()
+
+	go func() {
+		copy := hist
+		for i := 0; i < hist.size; i++ {
+			rx <- copy.data[i]
+		}
+	}()
 }
 
 type UnboundedHistory[T any] struct {
@@ -77,7 +87,10 @@ func (hist *UnboundedHistory[T]) fill(rx chan<- T) {
 	hist.mu.Lock()
 	defer hist.mu.Unlock()
 
-	for i := range hist.data {
-		rx <- hist.data[i]
-	}
+	go func() {
+		copy := hist.data
+		for i := range copy {
+			rx <- copy[i]
+		}
+	}()
 }
