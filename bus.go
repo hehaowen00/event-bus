@@ -3,6 +3,7 @@ package eventbus
 import (
 	"context"
 	"errors"
+	"sync"
 )
 
 var (
@@ -25,9 +26,11 @@ type Receiver[T any] struct {
 	bus    *EventBus[T]
 	recv   chan T
 	notify chan struct{}
+	mu     sync.Mutex
 
 	limit    int
 	backfill bool
+	queue    []T
 }
 
 func New[T any]() *EventBus[T] {
@@ -85,9 +88,27 @@ func (bus *EventBus[T]) start() {
 		case msg := <-bus.incoming:
 			bus.history.append(msg)
 
+			wg := sync.WaitGroup{}
+
 			for i := range bus.subscriptions {
-				bus.subscriptions[i].recv <- msg
+				go func(i int) {
+					wg.Add(1)
+					defer wg.Done()
+
+					r := bus.subscriptions[i]
+					r.mu.Lock()
+					defer r.mu.Unlock()
+
+					r.queue = append(r.queue, msg)
+
+					for len(r.queue) > 0 {
+						r.recv <- r.queue[0]
+						r.queue = r.queue[1:]
+					}
+				}(i)
 			}
+
+			wg.Wait()
 		}
 	}
 }
@@ -103,7 +124,7 @@ func (bus *EventBus[T]) Subscribe(backfill bool) (*Receiver[T], error) {
 	default:
 		rx := &Receiver[T]{
 			bus:      bus,
-			recv:     make(chan T),
+			recv:     make(chan T, 1),
 			notify:   make(chan struct{}),
 			backfill: backfill,
 		}
@@ -132,4 +153,8 @@ func (rx *Receiver[T]) Recv() <-chan T {
 
 func (rx *Receiver[T]) Close() {
 	rx.bus.Unsubscribe(rx)
+}
+
+func (rx *Receiver[T]) Queue() []T {
+	return rx.queue
 }

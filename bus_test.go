@@ -29,6 +29,7 @@ func TestEventBus_1(t *testing.T) {
 	bus.Send() <- 1337
 
 	time.Sleep(time.Second)
+
 	bus.Close()
 
 	wg.Wait()
@@ -66,6 +67,39 @@ func TestEventBus_2(t *testing.T) {
 	if _, err := bus.Subscribe(false); err == nil {
 		t.Fatal("expected error")
 	}
+}
+
+func TestEventBus_3(t *testing.T) {
+	bus := eventbus.New[int]()
+	wg := sync.WaitGroup{}
+	wg2 := sync.WaitGroup{}
+
+	rx, err := bus.Subscribe(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		bus.Send() <- 42
+	}()
+
+	go startWorker(rx, 1, &wg2)
+
+	go func() {
+		defer wg.Done()
+		bus.Send() <- 1337
+	}()
+
+	wg.Wait()
+
+	time.Sleep(time.Second)
+
+	bus.Close()
+
+	wg2.Wait()
 }
 
 func startWorker[T any](rx *eventbus.Receiver[T], id int, wg *sync.WaitGroup) {
