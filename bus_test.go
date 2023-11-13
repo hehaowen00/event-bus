@@ -1,8 +1,8 @@
 package eventbus_test
 
 import (
+	"fmt"
 	eventbus "hehaowen00/event-bus"
-	"log"
 	"sync"
 	"testing"
 	"time"
@@ -100,13 +100,13 @@ func startWorker[T any](rx *eventbus.Receiver[T], id int, wg *sync.WaitGroup) {
 	for {
 		select {
 		case <-rx.Notify():
-			log.Printf("closed (%d)\n", id)
+			fmt.Printf("closed (%d)\n", id)
 			return
 		case msg, ok := <-rx.Recv():
 			if !ok {
 				break
 			}
-			log.Printf("received (%d) %v\n", id, msg)
+			fmt.Printf("received (%d) %v\n", id, msg)
 		}
 	}
 }
