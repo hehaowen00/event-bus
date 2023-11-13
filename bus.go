@@ -88,27 +88,39 @@ func (bus *EventBus[T]) start() {
 		case msg := <-bus.incoming:
 			bus.history.append(msg)
 
-			wg := sync.WaitGroup{}
+			wait := make(chan struct{})
 
-			for i := range bus.subscriptions {
-				go func(i int) {
-					wg.Add(1)
-					defer wg.Done()
+			go func() {
+				wg := sync.WaitGroup{}
 
-					r := bus.subscriptions[i]
-					r.mu.Lock()
-					defer r.mu.Unlock()
+				for i := range bus.subscriptions {
+					go func(i int) {
+						wg.Add(1)
+						defer wg.Done()
 
-					r.queue = append(r.queue, msg)
+						r := bus.subscriptions[i]
+						r.mu.Lock()
+						defer r.mu.Unlock()
 
-					for len(r.queue) > 0 {
-						r.recv <- r.queue[0]
-						r.queue = r.queue[1:]
-					}
-				}(i)
-			}
+						r.queue = append(r.queue, msg)
 
-			wg.Wait()
+						for len(r.queue) > 0 {
+							if len(r.recv) > 0 {
+								return
+							}
+
+							r.recv <- r.queue[0]
+							r.queue = r.queue[1:]
+						}
+					}(i)
+				}
+
+				wg.Wait()
+
+				close(wait)
+			}()
+
+			<-wait
 		}
 	}
 }
