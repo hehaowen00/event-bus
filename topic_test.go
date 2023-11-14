@@ -141,8 +141,8 @@ func startWorker[T any](rx *eventbus.Receiver[T], id int, wg *sync.WaitGroup) {
 			if !ok {
 				continue
 			}
-			val := rx.Pop()
-			fmt.Printf("received (%d) %v\n", id, val)
+			data := rx.Dequeue()
+			fmt.Printf("received (%d) %v\n", id, data)
 		}
 	}
 }

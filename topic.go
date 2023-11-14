@@ -118,7 +118,6 @@ func (bus *Topic[T]) start() {
 						r := bus.subscriptions[i]
 						r.mu.Lock()
 						r.queue = append(r.queue, msg)
-
 						r.recv <- struct{}{}
 						r.mu.Unlock()
 					}(i)
@@ -186,11 +185,7 @@ func (rx *Receiver[T]) Close() {
 	rx.bus.Unsubscribe(rx)
 }
 
-func (rx *Receiver[T]) Queue() []T {
-	return rx.queue
-}
-
-func (rx *Receiver[T]) Pop() []T {
+func (rx *Receiver[T]) Dequeue() []T {
 	rx.mu.Lock()
 	defer rx.mu.Unlock()
 

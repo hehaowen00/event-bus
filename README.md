@@ -18,8 +18,13 @@ go func() {
         select {
             case <- rx.Notify():
                 return
-            case msg <- rx.Recv():
-                fmt.Println(msg)
+            case _, ok := <- rx.Recv():
+                if !ok {
+                    continue
+                }
+                data := rx.Dequeue()
+                for _, msg := range data {
+                }
         }
     }
 }()
