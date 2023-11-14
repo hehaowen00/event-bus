@@ -4,7 +4,7 @@ import (
 	"sync"
 )
 
-type HistoryStrategy[T any] interface {
+type History[T any] interface {
 	Prefill([]T)
 	append(T)
 	fill(chan<- T)
@@ -13,7 +13,7 @@ type HistoryStrategy[T any] interface {
 type EmptyHistory[T any] struct {
 }
 
-func NewEmptyHistory[T any]() HistoryStrategy[T] {
+func NewEmptyHistory[T any]() History[T] {
 	return &EmptyHistory[T]{}
 }
 
@@ -30,7 +30,7 @@ type FixedHistory[T any] struct {
 	mu    sync.Mutex
 }
 
-func NewFixedHistory[T any](size int) HistoryStrategy[T] {
+func NewFixedHistory[T any](size int) History[T] {
 	return &FixedHistory[T]{
 		data: make([]T, size, size),
 		size: size,
@@ -56,9 +56,9 @@ func (hist *FixedHistory[T]) fill(rx chan<- T) {
 	defer hist.mu.Unlock()
 
 	go func() {
-		copy := hist
+		clone := hist
 		for i := 0; i < hist.size; i++ {
-			rx <- copy.data[i]
+			rx <- clone.data[i]
 		}
 	}()
 }
@@ -68,7 +68,7 @@ type UnboundedHistory[T any] struct {
 	mu   sync.Mutex
 }
 
-func NewUnboundedHistory[T any]() HistoryStrategy[T] {
+func NewUnboundedHistory[T any]() History[T] {
 	return &UnboundedHistory[T]{}
 }
 
@@ -88,9 +88,9 @@ func (hist *UnboundedHistory[T]) fill(rx chan<- T) {
 	defer hist.mu.Unlock()
 
 	go func() {
-		copy := hist.data
-		for i := range copy {
-			rx <- copy[i]
+		clone := hist.data
+		for i := range clone {
+			rx <- clone[i]
 		}
 	}()
 }

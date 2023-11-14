@@ -10,12 +10,12 @@ var (
 	ErrEventBusClosed = errors.New("event bus closed")
 )
 
-type EventBus[T any] struct {
+type Topic[T any] struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	mu     sync.Mutex
 
-	history       HistoryStrategy[T]
+	history       History[T]
 	incoming      chan T
 	subscriptions []*Receiver[T]
 
@@ -24,7 +24,7 @@ type EventBus[T any] struct {
 }
 
 type Receiver[T any] struct {
-	bus    *EventBus[T]
+	bus    *Topic[T]
 	recv   chan T
 	notify chan struct{}
 	mu     sync.Mutex
@@ -34,10 +34,10 @@ type Receiver[T any] struct {
 	queue    []T
 }
 
-func New[T any]() *EventBus[T] {
+func New[T any]() *Topic[T] {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	bus := &EventBus[T]{
+	bus := &Topic[T]{
 		ctx:    ctx,
 		cancel: cancel,
 
@@ -52,10 +52,10 @@ func New[T any]() *EventBus[T] {
 	return bus
 }
 
-func NewWithHistory[T any](strategy HistoryStrategy[T]) *EventBus[T] {
+func NewWithHistory[T any](strategy History[T]) *Topic[T] {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	bus := &EventBus[T]{
+	bus := &Topic[T]{
 		ctx:    ctx,
 		cancel: cancel,
 
@@ -70,7 +70,7 @@ func NewWithHistory[T any](strategy HistoryStrategy[T]) *EventBus[T] {
 	return bus
 }
 
-func (bus *EventBus[T]) start() {
+func (bus *Topic[T]) start() {
 	for {
 		select {
 		case <-bus.ctx.Done():
@@ -129,14 +129,14 @@ func (bus *EventBus[T]) start() {
 	}
 }
 
-func (bus *EventBus[T]) Close() {
+func (bus *Topic[T]) Close() {
 	bus.mu.Lock()
 	defer bus.mu.Unlock()
 
 	bus.cancel()
 }
 
-func (bus *EventBus[T]) Subscribe(backfill bool) (*Receiver[T], error) {
+func (bus *Topic[T]) Subscribe(backfill bool) (*Receiver[T], error) {
 	select {
 	case <-bus.ctx.Done():
 		return nil, ErrEventBusClosed
@@ -154,18 +154,15 @@ func (bus *EventBus[T]) Subscribe(backfill bool) (*Receiver[T], error) {
 	}
 }
 
-func (bus *EventBus[T]) Unsubscribe(r *Receiver[T]) {
+func (bus *Topic[T]) Unsubscribe(r *Receiver[T]) {
 	bus.unsubscribeEvents <- r
 }
 
-func (bus *EventBus[T]) Sender() chan<- T {
+func (bus *Topic[T]) Sender() chan<- T {
 	return bus.incoming
 }
 
-func (bus *EventBus[T]) Send(msg T) {
-	bus.mu.Lock()
-	defer bus.mu.Unlock()
-
+func (bus *Topic[T]) Send(msg T) {
 	bus.incoming <- msg
 }
 

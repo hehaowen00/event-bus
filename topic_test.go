@@ -8,15 +8,15 @@ import (
 )
 
 func TestEventBus_1(t *testing.T) {
-	bus := eventbus.New[int]()
+	topic := eventbus.New[int]()
 	wg := sync.WaitGroup{}
 
-	rx1, err := bus.Subscribe(false)
+	rx1, err := topic.Subscribe(false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	rx2, err := bus.Subscribe(false)
+	rx2, err := topic.Subscribe(false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,14 +25,14 @@ func TestEventBus_1(t *testing.T) {
 	go startWorker(rx1, 1, &wg)
 	go startWorker(rx2, 2, &wg)
 
-	bus.Send(42)
-	bus.Send(1337)
+	topic.Send(42)
+	topic.Send(1337)
 
-	bus.Close()
+	topic.Close()
 
 	wg.Wait()
 
-	if _, err := bus.Subscribe(false); err == nil {
+	if _, err := topic.Subscribe(false); err == nil {
 		t.Fatal("expected error")
 	}
 }
@@ -41,15 +41,15 @@ func TestEventBus_2(t *testing.T) {
 	hist := eventbus.NewFixedHistory[int](2)
 	hist.Prefill([]int{42, 1337})
 
-	bus := eventbus.NewWithHistory(hist)
+	topic := eventbus.NewWithHistory(hist)
 	wg := sync.WaitGroup{}
 
-	rx1, err := bus.Subscribe(true)
+	rx1, err := topic.Subscribe(true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	rx2, err := bus.Subscribe(true)
+	rx2, err := topic.Subscribe(true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,32 +58,32 @@ func TestEventBus_2(t *testing.T) {
 	go startWorker(rx1, 1, &wg)
 	go startWorker(rx2, 2, &wg)
 
-	bus.Close()
+	topic.Close()
 
 	wg.Wait()
 
-	if _, err := bus.Subscribe(false); err == nil {
+	if _, err := topic.Subscribe(false); err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestEventBus_3(t *testing.T) {
-	bus := eventbus.New[int]()
+	topic := eventbus.New[int]()
 	wg := sync.WaitGroup{}
 
-	rx, err := bus.Subscribe(false)
+	rx, err := topic.Subscribe(false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	bus.Send(42)
+	topic.Send(42)
 
 	wg.Add(1)
 	go startWorker(rx, 1, &wg)
 
-	bus.Send(1337)
+	topic.Send(1337)
 
-	bus.Close()
+	topic.Close()
 
 	wg.Wait()
 }
@@ -91,12 +91,12 @@ func TestEventBus_3(t *testing.T) {
 func startWorker[T any](rx *eventbus.Receiver[T], id int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	val := <-rx.Recv()
-	fmt.Printf("received (%d) %v\n", id, val)
-
-	val = <-rx.Recv()
-	fmt.Printf("received (%d) %v\n", id, val)
-
-	<-rx.Notify()
-	fmt.Printf("closed (%d)\n", id)
+	for {
+		select {
+		case <-rx.Notify():
+			return
+		case val := <-rx.Recv():
+			fmt.Printf("received (%d) %v\n", id, val)
+		}
+	}
 }
