@@ -7,7 +7,7 @@ import (
 type History[T any] interface {
 	Prefill([]T)
 	append(T)
-	fill(chan<- T)
+	Data() []T
 }
 
 type EmptyHistory[T any] struct {
@@ -21,7 +21,9 @@ func (hist *EmptyHistory[T]) Prefill(data []T) {}
 
 func (hist *EmptyHistory[T]) append(_ T) {}
 
-func (hist *EmptyHistory[T]) fill(_ chan<- T) {}
+func (hist *EmptyHistory[T]) Data() []T {
+	return []T{}
+}
 
 type FixedHistory[T any] struct {
 	data  []T
@@ -51,16 +53,8 @@ func (hist *FixedHistory[T]) append(msg T) {
 	hist.index = (hist.index + 1) % hist.size
 }
 
-func (hist *FixedHistory[T]) fill(rx chan<- T) {
-	hist.mu.Lock()
-	defer hist.mu.Unlock()
-
-	go func() {
-		clone := hist
-		for i := 0; i < hist.size; i++ {
-			rx <- clone.data[i]
-		}
-	}()
+func (hist *FixedHistory[T]) Data() []T {
+	return hist.data
 }
 
 type UnboundedHistory[T any] struct {
@@ -83,14 +77,6 @@ func (hist *UnboundedHistory[T]) append(msg T) {
 	hist.data = append(hist.data, msg)
 }
 
-func (hist *UnboundedHistory[T]) fill(rx chan<- T) {
-	hist.mu.Lock()
-	defer hist.mu.Unlock()
-
-	go func() {
-		clone := hist.data
-		for i := range clone {
-			rx <- clone[i]
-		}
-	}()
+func (hist *UnboundedHistory[T]) Data() []T {
+	return hist.data
 }

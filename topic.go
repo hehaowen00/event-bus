@@ -25,7 +25,7 @@ type Topic[T any] struct {
 
 type Receiver[T any] struct {
 	bus    *Topic[T]
-	recv   chan T
+	recv   chan struct{}
 	notify chan struct{}
 	mu     sync.Mutex
 
@@ -74,22 +74,34 @@ func (bus *Topic[T]) start() {
 	for {
 		select {
 		case <-bus.ctx.Done():
+			bus.mu.Lock()
+			defer bus.mu.Unlock()
+
 			for i := range bus.subscriptions {
 				r := bus.subscriptions[i]
 				r.notify <- struct{}{}
 			}
-			break
-		case client := <-bus.subscribeEvents:
-			if client.backfill {
-				go func() {
-					client.mu.Lock()
-					defer client.mu.Unlock()
 
-					bus.history.fill(client.recv)
-				}()
+			return
+		case client := <-bus.subscribeEvents:
+			bus.mu.Lock()
+			if client.backfill {
+				client.mu.Lock()
+				client.queue = append(client.queue, bus.history.Data()...)
+				client.recv <- struct{}{}
+				client.mu.Unlock()
 			}
 			bus.subscriptions = append(bus.subscriptions, client)
-		case _ = <-bus.unsubscribeEvents:
+			bus.mu.Unlock()
+		case unsub := <-bus.unsubscribeEvents:
+			bus.mu.Lock()
+			for i := range bus.subscriptions {
+				if bus.subscriptions[i] == unsub {
+					bus.subscriptions = append(bus.subscriptions[:i], bus.subscriptions[i+1:]...)
+					break
+				}
+			}
+			bus.mu.Unlock()
 		case msg := <-bus.incoming:
 			bus.history.append(msg)
 
@@ -107,14 +119,7 @@ func (bus *Topic[T]) start() {
 						r.mu.Lock()
 						r.queue = append(r.queue, msg)
 
-						for len(r.queue) > 0 {
-							if len(r.recv) > 0 {
-								return
-							}
-
-							r.recv <- r.queue[0]
-							r.queue = r.queue[1:]
-						}
+						r.recv <- struct{}{}
 						r.mu.Unlock()
 					}(i)
 				}
@@ -143,7 +148,7 @@ func (bus *Topic[T]) Subscribe(backfill bool) (*Receiver[T], error) {
 	default:
 		rx := &Receiver[T]{
 			bus:      bus,
-			recv:     make(chan T, 1),
+			recv:     make(chan struct{}, 1),
 			notify:   make(chan struct{}),
 			backfill: backfill,
 		}
@@ -170,14 +175,32 @@ func (rx *Receiver[T]) Notify() <-chan struct{} {
 	return rx.notify
 }
 
-func (rx *Receiver[T]) Recv() <-chan T {
+func (rx *Receiver[T]) Recv() <-chan struct{} {
 	return rx.recv
 }
 
 func (rx *Receiver[T]) Close() {
+	rx.mu.Lock()
+	defer rx.mu.Unlock()
+
 	rx.bus.Unsubscribe(rx)
 }
 
 func (rx *Receiver[T]) Queue() []T {
 	return rx.queue
+}
+
+func (rx *Receiver[T]) Pop() []T {
+	rx.mu.Lock()
+	defer rx.mu.Unlock()
+
+	if len(rx.queue) == 0 {
+		return nil
+	}
+
+	clone := rx.queue
+
+	rx.queue = nil
+
+	return clone
 }
