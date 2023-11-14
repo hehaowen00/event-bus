@@ -99,14 +99,12 @@ func (bus *EventBus[T]) start() {
 				wg := sync.WaitGroup{}
 
 				for i := range bus.subscriptions {
-					go func(i int) {
-						wg.Add(1)
-						defer wg.Done()
+					wg.Add(1)
 
+					go func(i int) {
+						defer wg.Done()
 						r := bus.subscriptions[i]
 						r.mu.Lock()
-						defer r.mu.Unlock()
-
 						r.queue = append(r.queue, msg)
 
 						for len(r.queue) > 0 {
@@ -117,6 +115,7 @@ func (bus *EventBus[T]) start() {
 							r.recv <- r.queue[0]
 							r.queue = r.queue[1:]
 						}
+						r.mu.Unlock()
 					}(i)
 				}
 

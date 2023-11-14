@@ -5,7 +5,6 @@ import (
 	eventbus "hehaowen00/event-bus"
 	"sync"
 	"testing"
-	"time"
 )
 
 func TestEventBus_1(t *testing.T) {
@@ -28,8 +27,6 @@ func TestEventBus_1(t *testing.T) {
 
 	bus.Send(42)
 	bus.Send(1337)
-
-	time.Sleep(time.Second)
 
 	bus.Close()
 
@@ -61,7 +58,6 @@ func TestEventBus_2(t *testing.T) {
 	go startWorker(rx1, 1, &wg)
 	go startWorker(rx2, 2, &wg)
 
-	time.Sleep(time.Second)
 	bus.Close()
 
 	wg.Wait()
@@ -87,8 +83,6 @@ func TestEventBus_3(t *testing.T) {
 
 	bus.Send(1337)
 
-	time.Sleep(time.Second)
-
 	bus.Close()
 
 	wg.Wait()
@@ -97,16 +91,12 @@ func TestEventBus_3(t *testing.T) {
 func startWorker[T any](rx *eventbus.Receiver[T], id int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	for {
-		select {
-		case <-rx.Notify():
-			fmt.Printf("closed (%d)\n", id)
-			return
-		case msg, ok := <-rx.Recv():
-			if !ok {
-				break
-			}
-			fmt.Printf("received (%d) %v\n", id, msg)
-		}
-	}
+	val := <-rx.Recv()
+	fmt.Printf("received (%d) %v\n", id, val)
+
+	val = <-rx.Recv()
+	fmt.Printf("received (%d) %v\n", id, val)
+
+	<-rx.Notify()
+	fmt.Printf("closed (%d)\n", id)
 }
