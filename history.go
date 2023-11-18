@@ -5,8 +5,7 @@ import (
 )
 
 type History[T any] interface {
-	Prefill([]T)
-	append(T)
+	Append(T)
 	Data() []T
 }
 
@@ -17,9 +16,7 @@ func NewEmptyHistory[T any]() History[T] {
 	return &EmptyHistory[T]{}
 }
 
-func (hist *EmptyHistory[T]) Prefill(data []T) {}
-
-func (hist *EmptyHistory[T]) append(_ T) {}
+func (hist *EmptyHistory[T]) Append(_ T) {}
 
 func (hist *EmptyHistory[T]) Data() []T {
 	return []T{}
@@ -34,23 +31,16 @@ type FixedHistory[T any] struct {
 
 func NewFixedHistory[T any](size int) History[T] {
 	return &FixedHistory[T]{
-		data: make([]T, size, size),
+		data: make([]T, size),
 		size: size,
 	}
 }
 
-func (hist *FixedHistory[T]) Prefill(data []T) {
-	for i := range data {
-		hist.append(data[i])
-	}
-}
-
-func (hist *FixedHistory[T]) append(msg T) {
+func (hist *FixedHistory[T]) Append(msg T) {
 	hist.mu.Lock()
-	defer hist.mu.Unlock()
-
 	hist.data[hist.index] = msg
 	hist.index = (hist.index + 1) % hist.size
+	hist.mu.Unlock()
 }
 
 func (hist *FixedHistory[T]) Data() []T {
@@ -66,15 +56,10 @@ func NewUnboundedHistory[T any]() History[T] {
 	return &UnboundedHistory[T]{}
 }
 
-func (hist *UnboundedHistory[T]) Prefill(data []T) {
-	hist.data = data
-}
-
-func (hist *UnboundedHistory[T]) append(msg T) {
+func (hist *UnboundedHistory[T]) Append(msg T) {
 	hist.mu.Lock()
-	defer hist.mu.Unlock()
-
 	hist.data = append(hist.data, msg)
+	hist.mu.Unlock()
 }
 
 func (hist *UnboundedHistory[T]) Data() []T {

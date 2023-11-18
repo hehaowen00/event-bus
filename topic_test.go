@@ -42,7 +42,8 @@ func TestEventBus_1(t *testing.T) {
 
 func TestEventBus_2(t *testing.T) {
 	hist := eventbus.NewFixedHistory[int](2)
-	hist.Prefill([]int{42, 1337})
+	hist.Append(42)
+	hist.Append(1337)
 
 	topic := eventbus.NewWithHistory(hist)
 	wg := sync.WaitGroup{}
@@ -97,7 +98,9 @@ func TestEventBus_3(t *testing.T) {
 
 func TestEventBus_4(t *testing.T) {
 	hist := eventbus.NewFixedHistory[int](8)
-	hist.Prefill([]int{1, 2, 3, 4, 5, 6, 7, 8})
+	for i := 1; i < 9; i++ {
+		hist.Append(i)
+	}
 
 	topic := eventbus.NewWithHistory(hist)
 	wg := sync.WaitGroup{}
@@ -131,16 +134,16 @@ func TestEventBus_4(t *testing.T) {
 }
 
 func startWorker[T any](rx *eventbus.Receiver[T], id int, wg *sync.WaitGroup) {
-	defer wg.Done()
-
 	for {
 		select {
 		case <-rx.Notify():
+			wg.Done()
 			return
 		case _, ok := <-rx.Recv():
 			if !ok {
 				continue
 			}
+
 			data := rx.Dequeue()
 			fmt.Printf("received (%d) %v\n", id, data)
 		}

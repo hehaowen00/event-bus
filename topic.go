@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	ErrEventBusClosed = errors.New("event bus closed")
+	ErrTopicClosed = errors.New("topic closed")
 )
 
 type Topic[T any] struct {
@@ -19,155 +19,153 @@ type Topic[T any] struct {
 	incoming      chan T
 	subscriptions []*Receiver[T]
 
-	subscribeEvents   chan *Receiver[T]
+	subscribeEvents   chan *subscription[T]
 	unsubscribeEvents chan *Receiver[T]
 }
 
 type Receiver[T any] struct {
-	bus    *Topic[T]
+	topic  *Topic[T]
 	recv   chan struct{}
 	notify chan struct{}
 	mu     sync.Mutex
+	queue  []T
+}
 
-	limit    int
+type subscription[T any] struct {
+	rx       *Receiver[T]
 	backfill bool
-	queue    []T
 }
 
 func New[T any]() *Topic[T] {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	bus := &Topic[T]{
-		ctx:    ctx,
-		cancel: cancel,
-
-		history:           NewEmptyHistory[T](),
-		incoming:          make(chan T),
-		subscribeEvents:   make(chan *Receiver[T]),
-		unsubscribeEvents: make(chan *Receiver[T]),
-	}
-
-	go bus.start()
-
-	return bus
+	return NewWithHistory[T](NewEmptyHistory[T]())
 }
 
 func NewWithHistory[T any](strategy History[T]) *Topic[T] {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	bus := &Topic[T]{
+	t := &Topic[T]{
 		ctx:    ctx,
 		cancel: cancel,
 
 		history:           strategy,
 		incoming:          make(chan T),
-		subscribeEvents:   make(chan *Receiver[T]),
+		subscribeEvents:   make(chan *subscription[T]),
 		unsubscribeEvents: make(chan *Receiver[T]),
 	}
 
-	go bus.start()
+	go t.start()
 
-	return bus
+	return t
 }
 
-func (bus *Topic[T]) start() {
+func (t *Topic[T]) start() {
 	for {
 		select {
-		case <-bus.ctx.Done():
-			bus.mu.Lock()
-			defer bus.mu.Unlock()
+		case <-t.ctx.Done():
+			t.mu.Lock()
 
-			for i := range bus.subscriptions {
-				r := bus.subscriptions[i]
+			for i := range t.subscriptions {
+				r := t.subscriptions[i]
 				r.notify <- struct{}{}
 			}
 
+			t.mu.Unlock()
 			return
-		case client := <-bus.subscribeEvents:
-			bus.mu.Lock()
-			if client.backfill {
-				client.mu.Lock()
-				client.queue = append(client.queue, bus.history.Data()...)
-				client.recv <- struct{}{}
-				client.mu.Unlock()
+		case sub := <-t.subscribeEvents:
+			t.mu.Lock()
+			rx := sub.rx
+
+			if sub.backfill {
+				rx.mu.Lock()
+
+				rx.queue = append(rx.queue, t.history.Data()...)
+				rx.recv <- struct{}{}
+
+				rx.mu.Unlock()
 			}
-			bus.subscriptions = append(bus.subscriptions, client)
-			bus.mu.Unlock()
-		case unsub := <-bus.unsubscribeEvents:
-			bus.mu.Lock()
-			for i := range bus.subscriptions {
-				if bus.subscriptions[i] == unsub {
-					bus.subscriptions = append(bus.subscriptions[:i], bus.subscriptions[i+1:]...)
+
+			t.subscriptions = append(t.subscriptions, rx)
+
+			t.mu.Unlock()
+		case rx := <-t.unsubscribeEvents:
+			t.mu.Lock()
+
+			for i := range t.subscriptions {
+				if t.subscriptions[i] == rx {
+					t.subscriptions = append(t.subscriptions[:i], t.subscriptions[i+1:]...)
 					break
 				}
 			}
-			bus.mu.Unlock()
-		case msg := <-bus.incoming:
-			bus.history.append(msg)
+
+			t.mu.Unlock()
+		case msg := <-t.incoming:
+			t.history.Append(msg)
 
 			wait := make(chan struct{})
 
-			go func() {
+			go func(el T) {
 				wg := sync.WaitGroup{}
 
-				for i := range bus.subscriptions {
+				for i := range t.subscriptions {
 					wg.Add(1)
 
 					go func(i int) {
-						defer wg.Done()
-						r := bus.subscriptions[i]
+						r := t.subscriptions[i]
 						r.mu.Lock()
-						r.queue = append(r.queue, msg)
-						r.recv <- struct{}{}
+
+						r.queue = append(r.queue, el)
+						if len(r.recv) == 0 {
+							r.recv <- struct{}{}
+						}
+
 						r.mu.Unlock()
+						wg.Done()
 					}(i)
 				}
 
 				wg.Wait()
 
 				close(wait)
-			}()
+			}(msg)
 
 			<-wait
 		}
 	}
 }
 
-func (bus *Topic[T]) Close() {
-	bus.mu.Lock()
-	defer bus.mu.Unlock()
-
-	bus.cancel()
+func (t *Topic[T]) Close() {
+	t.mu.Lock()
+	t.cancel()
+	t.mu.Unlock()
 }
 
-func (bus *Topic[T]) Subscribe(backfill bool) (*Receiver[T], error) {
+func (t *Topic[T]) Subscribe(backfill bool) (*Receiver[T], error) {
 	select {
-	case <-bus.ctx.Done():
-		return nil, ErrEventBusClosed
+	case <-t.ctx.Done():
+		return nil, ErrTopicClosed
 	default:
 		rx := &Receiver[T]{
-			bus:      bus,
-			recv:     make(chan struct{}, 1),
-			notify:   make(chan struct{}),
-			backfill: backfill,
+			topic:  t,
+			recv:   make(chan struct{}, 1),
+			notify: make(chan struct{}),
 		}
 
-		bus.subscribeEvents <- rx
+		t.subscribeEvents <- newSubscription(rx, backfill)
 
 		return rx, nil
 	}
 }
 
-func (bus *Topic[T]) Unsubscribe(r *Receiver[T]) {
-	bus.unsubscribeEvents <- r
+func (t *Topic[T]) Unsubscribe(r *Receiver[T]) {
+	t.unsubscribeEvents <- r
 }
 
-func (bus *Topic[T]) Sender() chan<- T {
-	return bus.incoming
+func (t *Topic[T]) Sender() chan<- T {
+	return t.incoming
 }
 
-func (bus *Topic[T]) Send(msg T) {
-	bus.incoming <- msg
+func (t *Topic[T]) Send(msg T) {
+	t.incoming <- msg
 }
 
 func (rx *Receiver[T]) Notify() <-chan struct{} {
@@ -180,14 +178,12 @@ func (rx *Receiver[T]) Recv() <-chan struct{} {
 
 func (rx *Receiver[T]) Close() {
 	rx.mu.Lock()
-	defer rx.mu.Unlock()
-
-	rx.bus.Unsubscribe(rx)
+	rx.topic.Unsubscribe(rx)
+	rx.mu.Unlock()
 }
 
 func (rx *Receiver[T]) Dequeue() []T {
 	rx.mu.Lock()
-	defer rx.mu.Unlock()
 
 	if len(rx.queue) == 0 {
 		return nil
@@ -196,6 +192,14 @@ func (rx *Receiver[T]) Dequeue() []T {
 	clone := rx.queue
 
 	rx.queue = nil
+	rx.mu.Unlock()
 
 	return clone
+}
+
+func newSubscription[T any](rx *Receiver[T], backfill bool) *subscription[T] {
+	return &subscription[T]{
+		rx:       rx,
+		backfill: backfill,
+	}
 }
