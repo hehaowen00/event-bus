@@ -6,10 +6,14 @@ A golang channel based event bus that tries to guarantee the same message order 
 
 ```go
 // create event bus with empty history
-bus := eventbus.New[int]()
+bus := eventbus.NewEventBus[int]() 
+
+topic := eventbus.NewTopic[int]()
+
+bus.Add("topic", topic)
 
 // subscribe
-rx, err := bus.Subscribe(false)
+rx, err := topic.Subscribe(false)
 _ = err
 
 // start worker
@@ -30,9 +34,9 @@ go func() {
 }()
 
 // send message
-bus.Send(42)
+topic.Send(42)
 
-bus.Close()
+topic.Close()
 ```
 
 ## message history

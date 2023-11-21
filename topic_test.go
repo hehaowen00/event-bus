@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-func TestEventBus_1(t *testing.T) {
-	topic := eventbus.New[int]()
+func TestTopic_1(t *testing.T) {
+	topic := eventbus.NewTopic[int]()
 	wg := sync.WaitGroup{}
 
 	rx1, err := topic.Subscribe(false)
@@ -40,7 +40,7 @@ func TestEventBus_1(t *testing.T) {
 	}
 }
 
-func TestEventBus_2(t *testing.T) {
+func TestTopic_2(t *testing.T) {
 	hist := eventbus.NewFixedHistory[int](2)
 	hist.Append(42)
 	hist.Append(1337)
@@ -73,8 +73,8 @@ func TestEventBus_2(t *testing.T) {
 	}
 }
 
-func TestEventBus_3(t *testing.T) {
-	topic := eventbus.New[int]()
+func TestTopic_3(t *testing.T) {
+	topic := eventbus.NewTopic[int]()
 	wg := sync.WaitGroup{}
 
 	rx, err := topic.Subscribe(false)
@@ -96,7 +96,7 @@ func TestEventBus_3(t *testing.T) {
 	wg.Wait()
 }
 
-func TestEventBus_4(t *testing.T) {
+func TestTopic_4(t *testing.T) {
 	hist := eventbus.NewFixedHistory[int](8)
 	for i := 1; i < 9; i++ {
 		hist.Append(i)

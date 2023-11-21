@@ -36,7 +36,7 @@ type subscription[T any] struct {
 	backfill bool
 }
 
-func New[T any]() *Topic[T] {
+func NewTopic[T any]() *Topic[T] {
 	return NewWithHistory[T](NewEmptyHistory[T]())
 }
 
@@ -157,15 +157,31 @@ func (t *Topic[T]) Subscribe(backfill bool) (*Receiver[T], error) {
 }
 
 func (t *Topic[T]) Unsubscribe(r *Receiver[T]) {
-	t.unsubscribeEvents <- r
+	select {
+	case <-t.ctx.Done():
+		return
+	default:
+		t.unsubscribeEvents <- r
+	}
 }
 
 func (t *Topic[T]) Sender() chan<- T {
-	return t.incoming
+	select {
+	case <-t.ctx.Done():
+		return nil
+	default:
+		return t.incoming
+	}
 }
 
-func (t *Topic[T]) Send(msg T) {
-	t.incoming <- msg
+func (t *Topic[T]) Send(msg T) error {
+	select {
+	case <-t.ctx.Done():
+		return ErrTopicClosed
+	default:
+		t.incoming <- msg
+		return nil
+	}
 }
 
 func (rx *Receiver[T]) Notify() <-chan struct{} {
