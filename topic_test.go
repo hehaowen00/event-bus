@@ -2,10 +2,11 @@ package eventbus_test
 
 import (
 	"fmt"
-	eventbus "hehaowen00/event-bus"
 	"sync"
 	"testing"
 	"time"
+
+	eventbus "github.com/hehaowen00/event-bus"
 )
 
 func TestTopic_1(t *testing.T) {

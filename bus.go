@@ -18,6 +18,7 @@ func NewEventBus[T any]() *EventBus[T] {
 
 func (bus *EventBus[T]) Add(name string, topic *Topic[T]) {
 	bus.mu.Lock()
+	defer bus.mu.Unlock()
 
 	existing, ok := bus.topics[name]
 	if !ok {
@@ -27,8 +28,6 @@ func (bus *EventBus[T]) Add(name string, topic *Topic[T]) {
 
 	existing.Close()
 	bus.topics[name] = topic
-
-	bus.mu.Unlock()
 }
 
 func (bus *EventBus[T]) Get(name string) *Topic[T] {

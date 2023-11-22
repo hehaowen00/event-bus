@@ -1,8 +1,9 @@
 package eventbus_test
 
 import (
-	eventbus "hehaowen00/event-bus"
 	"testing"
+
+	eventbus "github.com/hehaowen00/event-bus"
 )
 
 func TestEventBus_1(t *testing.T) {
