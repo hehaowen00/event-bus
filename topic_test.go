@@ -2,6 +2,7 @@ package eventbus_test
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -27,10 +28,16 @@ func TestTopic_1(t *testing.T) {
 	go startWorker(rx1, 1, &wg)
 	go startWorker(rx2, 2, &wg)
 
+	// wait := make(chan struct{})
+	// go func() {
 	topic.Send(42)
 	topic.Send(1337)
+	// 	close(wait)
+	// }()
+	// <-wait
 
-	time.Sleep(time.Second)
+	// time.Sleep(time.Second)
+	runtime.Gosched()
 
 	topic.Close()
 
@@ -63,7 +70,8 @@ func TestTopic_2(t *testing.T) {
 	go startWorker(rx1, 1, &wg)
 	go startWorker(rx2, 2, &wg)
 
-	time.Sleep(time.Second)
+	// time.Sleep(time.Second)
+	runtime.Gosched()
 
 	topic.Close()
 
@@ -91,6 +99,7 @@ func TestTopic_3(t *testing.T) {
 	topic.Send(1337)
 
 	time.Sleep(time.Second)
+	runtime.Gosched()
 
 	topic.Close()
 
@@ -123,7 +132,8 @@ func TestTopic_4(t *testing.T) {
 	topic.Send(42)
 	topic.Send(1337)
 
-	time.Sleep(time.Second)
+	// time.Sleep(time.Second)
+	runtime.Gosched()
 
 	topic.Close()
 
@@ -132,6 +142,49 @@ func TestTopic_4(t *testing.T) {
 	if _, err := topic.Subscribe(false); err == nil {
 		t.Fatal("expected error")
 	}
+}
+
+type TestMessage struct {
+	data string
+}
+
+func TestTopic_5(t *testing.T) {
+	hist := eventbus.NewFixedHistory[TestMessage](8)
+	hist.Append(TestMessage{
+		data: "Hello, World!",
+	})
+
+	topic := eventbus.NewWithHistory(hist)
+	wg := sync.WaitGroup{}
+
+	rx1, err := topic.Subscribe(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	topic.Send(TestMessage{
+		data: "Hello, World!",
+	})
+
+	wg.Add(1)
+	go startWorker[TestMessage](rx1, 1, &wg)
+
+	// wait := make(chan struct{})
+	// go func() {
+	topic.Send(TestMessage{
+		data: "Hello, World!",
+	})
+
+	topic.Send(TestMessage{
+		data: "Hello, World!",
+	})
+	runtime.Gosched()
+	// 	close(wait)
+	// }()
+	// <-wait
+
+	topic.Close()
+	wg.Wait()
 }
 
 func startWorker[T any](rx *eventbus.Receiver[T], id int, wg *sync.WaitGroup) {
