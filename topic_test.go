@@ -28,16 +28,10 @@ func TestTopic_1(t *testing.T) {
 	go startWorker(rx1, 1, &wg)
 	go startWorker(rx2, 2, &wg)
 
-	// wait := make(chan struct{})
-	// go func() {
 	topic.Send(42)
 	topic.Send(1337)
-	// 	close(wait)
-	// }()
-	// <-wait
 
-	// time.Sleep(time.Second)
-	runtime.Gosched()
+	time.Sleep(time.Second)
 
 	topic.Close()
 
@@ -70,8 +64,7 @@ func TestTopic_2(t *testing.T) {
 	go startWorker(rx1, 1, &wg)
 	go startWorker(rx2, 2, &wg)
 
-	// time.Sleep(time.Second)
-	runtime.Gosched()
+	time.Sleep(time.Second)
 
 	topic.Close()
 
@@ -132,8 +125,7 @@ func TestTopic_4(t *testing.T) {
 	topic.Send(42)
 	topic.Send(1337)
 
-	// time.Sleep(time.Second)
-	runtime.Gosched()
+	time.Sleep(time.Second)
 
 	topic.Close()
 
@@ -169,8 +161,6 @@ func TestTopic_5(t *testing.T) {
 	wg.Add(1)
 	go startWorker[TestMessage](rx1, 1, &wg)
 
-	// wait := make(chan struct{})
-	// go func() {
 	topic.Send(TestMessage{
 		data: "Hello, World!",
 	})
@@ -178,10 +168,8 @@ func TestTopic_5(t *testing.T) {
 	topic.Send(TestMessage{
 		data: "Hello, World!",
 	})
-	runtime.Gosched()
-	// 	close(wait)
-	// }()
-	// <-wait
+
+	time.Sleep(time.Second)
 
 	topic.Close()
 	wg.Wait()

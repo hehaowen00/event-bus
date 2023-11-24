@@ -101,34 +101,34 @@ func (t *Topic[T]) start() {
 		case msg := <-t.incoming:
 			t.history.Append(msg)
 
-			wait := make(chan struct{})
+			// wait := make(chan struct{})
 
-			go func(el T) {
-				wg := sync.WaitGroup{}
+			// go func(el T) {
+			wg := sync.WaitGroup{}
 
-				for i := range t.subscriptions {
-					wg.Add(1)
+			for i := range t.subscriptions {
+				wg.Add(1)
 
-					go func(i int) {
-						r := t.subscriptions[i]
-						r.mu.Lock()
+				go func(i int) {
+					r := t.subscriptions[i]
+					r.mu.Lock()
 
-						r.queue = append(r.queue, el)
-						if len(r.recv) == 0 {
-							r.recv <- struct{}{}
-						}
+					r.queue = append(r.queue, msg)
+					if len(r.recv) == 0 {
+						r.recv <- struct{}{}
+					}
 
-						r.mu.Unlock()
-						wg.Done()
-					}(i)
-				}
+					r.mu.Unlock()
+					wg.Done()
+				}(i)
+			}
 
-				wg.Wait()
+			wg.Wait()
 
-				close(wait)
-			}(msg)
+			// close(wait)
+			// }(msg)
 
-			<-wait
+			// <-wait
 		}
 	}
 }
